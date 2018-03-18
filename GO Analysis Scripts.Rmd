@@ -7,7 +7,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-##Purpose of this code
+## Purpose of this code
 To annotate datasets with GO Terms and then give all Terms present a p-value based on Fisher's Exact Test. There are four data sets and three GO categories, furthermore the datasets have been analysed for all genes, up-regulated only and down-regulated only to determine components/functions/processes which are being promoted and those which are being reduced in expression. Due to the number of processes necessary to process the data like this, the code takes quite a long period of time to run, approx. 1-2 hours. An alternative final script for testing is provided as explained below at appropriate step.
 
 After code is run, open one of the csv's and copy all text except the top row. Paste into the text box at http://revigo.irb.hr/ and click Start Revigo. Select Treemap from the tabs.
