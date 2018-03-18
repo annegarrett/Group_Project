@@ -63,7 +63,7 @@ Old_FPKM$Time<-c(rep(c("Baseline","2h","Trained"),6))
 Old_PCA<-autoplot(prcomp(Old_FPKM[1:22912]), x=2,y=3, data = Old_FPKM, colour = 'Time',shape="Sample")+ggtitle("PCA on Old Samples")
 ```
 
-###Young-group PCA
+### Young-group PCA
 ```{r, results="hide"}
 YG_FPKM<-all_gene[,21:38]
 YG_FPKM<-t(YG_FPKM)
@@ -97,7 +97,7 @@ YG_group<-YG_FPKM$Time
 pca3d(YG_PCA_3d, group=YG_group,show.centroids = TRUE,legend ="top")
 ```
 
-##Differential Analysis
+## Differential Analysis
 ```{r,results="hide",warning=FALSE, message=F}
 #load data
 YG_baseline_2h <- read.csv("YG_baseline_2h.csv", row.names=1)
@@ -171,7 +171,7 @@ g4 <- ggplot(data=Old_baseline_training_results, aes(x=log2FC, y =prob,colour=th
 ggarrange(g1,g2,g3,g4,nrow=2,ncol=2,labels = c("A","B","C","D"))
 ```
 
-###Finding DEGs shared between groups
+### Finding DEGs shared between groups
 ```{r,results="hide"}
 #Import data
 #DEGs <- read.csv("DEGs.csv",header = T)
