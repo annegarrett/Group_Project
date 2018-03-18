@@ -1,0 +1,247 @@
+---
+title: "GO Analysis"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Purpose of this code
+To annotate datasets with GO Terms and then give all Terms present a p-value based on Fisher's Exact Test. There are four data sets and three GO categories, furthermore the datasets have been analysed for all genes, up-regulated only and down-regulated only to determine components/functions/processes which are being promoted and those which are being reduced in expression. Due to the number of processes necessary to process the data like this, the code takes quite a long period of time to run, approx. 1-2 hours. Instructions to streamline the process for testing will be provided through this document.
+
+It is expected the datasets will be in your working directory having previous run the last .Rmd file as explained in comments.
+
+## Packages
+
+```{r echo = FALSE}
+library(readr) #loading tsvs
+library(tibble) #using tibbles for df's
+library(dplyr) #manipulating data
+```
+
+## Load Datasets
+Adding relevant files from working directory to working session. Please set working directory if necessary to where all files are.
+gene2go MUST be unzipped first in folder.
+```{r echo = FALSE}
+setwd() <- getwd() #Input location of files on computer
+Old_baseline_2h_results <- read.csv("Old_baseline_2h_results.csv",header = T)
+Old_baseline_trained_results <- read.csv("Old_baseline_training_results.csv",header = T)
+YG_baseline_2h_results <- read.csv("YG_baseline_2h_results.csv",header = T)
+YG_baseline_trained_results <- read.csv("YG_baseline_training_results.csv",header = T)
+gene2go <- read_delim("~/Downloads/gene2go (1)", 
+          "\t", escape_double = FALSE, trim_ws = TRUE)
+```
+
+## Function
+This will be used in the next step to create individual p-values for GO Terms present in a file put in the working directory. Explanation of output file naming convention is in the comments.
+```{r pressure, echo=FALSE}
+#Instructions for general use
+#Please ensure the files to analyze are in the working directory.
+#This is designed to be run after "Group Project Code.Rmd" but can be used for other purposes if tailored correctly
+#The expected format is columns: GeneID (numerical), Baseline_mean, Trained_mean, theta, prob, log2FC, threshold
+#HOWEVER, only GeneID, log2FC and prob (probability) are actually used so others are superfluous
+#In some cases GeneID may have the column name X1, in this case it is changed to GeneID in the function
+#GeneID should be column 1
+
+#Also you must have, in the working directors, a file called gene2go which indexes all the GO Terms for each gene. 
+#It is available from ftp://ftp.ncbi.nih.gov/gene/DATA/gene2go.gz OR provided on our github - IT MUST BE UNZIPPED
+
+#Function for analyzing GO terms based on their category
+#Options - all must be completed and in quotes except the Dataset
+#Dataset = insert name of dataset to analyse, this needs to be loaded in the Working Session before running.
+#Age = "O" for Old OR "Y" for Young (with quotes)
+#Comparison = "bv2" for baseline vs 2 hours training OR "bvt" for baseline vs training for 2 weeks (with quotes)
+#Category = "C" for Component (location in cell) OR "F" Function (function of protein from gene) OR "P" for Process (biological process it is involved with) (with quotes)
+#Regulated = "Up" for upregulated DEG's only, "Down" for down regulated and "UpAndDown" for both
+
+#Output - a list of all unique GO Terms which are significantly represented in the input file
+## FIle name is systematically named with the following components:
+## C/F/P (GO Category) + O/Y (age group) + M- (Male) + bv2/bv2 (baseline vs 2 hours/trained) + U&D/U/D Up & Down/Up/Down Regulated
+
+#First Source the GO Analysis Function
+
+GO.Analyzer <- function(Dataset, Age = c("O", "Y"), Comparison = c("bv2", "bvt", "2vt"), GO.Category = c("C", "F", "P"), Regulated = c("Up", "Down", "Both")){
+  
+  #Obtain dataset from function
+  data <- Dataset
+  
+  if(Regulated == "Up"){
+    data <- data[which(data$log2FC > 0),]
+  }
+  if(Regulated == "Down"){
+    data <- data[which(data$log2FC < 0),]
+  }
+  if(Regulated == "Both"){
+    Regulated <- "UpAndDown"
+  }
+  
+  #Rename first column if necessary
+  if(colnames(data[1]) == "X1"){
+    data <- dplyr::rename(data, GeneID = X1)
+  }
+  if(colnames(data[1]) == "X"){
+    data <- dplyr::rename(data, GeneID = X)
+  }
+  #Check the column is now named correctly, if not error message
+  if(colnames(data[1]) != "GeneID"){
+    print("GeneID may not be named correctly in tibble data")
+  }
+  
+  #Define GO.Category
+  if(GO.Category == "C"){
+    GO.Category <- "Component"
+  }
+  if(GO.Category == "F"){
+    GO.Category <- "Function"
+  }
+  if(GO.Category == "P"){
+    GO.Category <- "Process"
+  }
+
+  #filter gene2go for just homo sapiens (tax id = 9606)  then add gene2g0 for annotations
+  gene2go <- gene2go[which(gene2go$`#tax_id` == 9606),]
+  annotations <- gene2go
+  
+  # combine data files for differentially expressed genes and gene annotation
+  data.annotated <- merge(x = data, y = annotations, by = "GeneID")
+  
+  # Make a list of all pathways/GO Terms etc - filter first
+  #Filter by Category of GO Terms - Component, Function or Process
+  filtered_results <- annotations[which(annotations$Category == GO.Category),]
+  filtered_results <- as.data.frame(filtered_results)
+  
+  #Create a list of unique GO terms in order to go through in loop
+  GO_BP<-filtered_results$GO_ID
+  uniGO_BP <- unique(GO_BP)
+  uniGO_BP <- sort(uniGO_BP)
+  
+  #Create a list of all GO Terms for genes which are significantly expressed
+  Sig.Genes<-subset(data.annotated,data.annotated$prob>0.8)
+
+  # Run a Fisher test on all GO Terms, one by one in a loop
+  #First create a table to present results of Fisher test
+  summaryresults<-data.frame(Functionname=as.character(),pvalue=as.numeric(),sigInID=as.numeric(),nonSigInID=as.numeric(),sigNotInID=as.numeric(),nonSigNotInID=as.numeric())
+  #Loop through all GO Terms in data set
+  #Then define the Go Term to be looked at
+  #Create Fisher Matrix
+  #In first cell number of Genes with our GO Term and also significant
+  #Down a cell the number that have the GO Term but are not significant
+  #Top right cell is those that are significant but don't have the GO Term
+  #Down a cell is the number of all the Genes without the GO Term and that are not significant
+  #Run Fisher Test and combine results to create summary results
+  for (i in 1:length(uniGO_BP)){
+    GO.Term <- data.annotated[data.annotated$GO_ID == uniGO_BP[i], ] 
+    FisherMatrix <- matrix(nrow=2, ncol=2, data=c(-1, -2, -3, -4), dimnames=list("Genes including GO Term" = c("y", "n"), "Genes with sign pvalue" = c("y", "n")))
+    FisherMatrix[1,1]  =  length(intersect( GO.Term$GeneID,  Sig.Genes$GeneID) ) 
+    FisherMatrix[2,1]   = length(setdiff(Sig.Genes$GeneID, GO.Term$GeneID ))
+    FisherMatrix[1,2]   = length(setdiff(GO.Term$GeneID, Sig.Genes$GeneID  ))
+    FisherMatrix[2,2]   = length(setdiff(data.annotated$GeneID, union(GO.Term$GeneID,Sig.Genes$GeneID)))
+    results<-fisher.test(FisherMatrix, alternative = "greater")
+    output<-data.frame(GO.Name=uniGO_BP[i],pvalue=results$p.value,sigInID=FisherMatrix[1,1],nonSigInID=FisherMatrix[1,2],sigNotInID= FisherMatrix[2,1],nonSigNotInID=FisherMatrix[2,2])
+    summaryresults<-rbind(summaryresults,output)
+    if (i == 1){
+    }
+  }
+  
+  #Add an addjust p value by false discovery rate (fdr)
+  summaryresults$p.adjusted<-p.adjust(summaryresults[,2], method="fdr")
+  sig.list<-subset(summaryresults,summaryresults$p.adjusted<0.05)
+  
+  #Create output file with GO Terms and their adjusted p-value
+  dplyr::select(summaryresults, GO.Name, p.adjusted) %>% filter( p.adjusted < 0.05) %>% write_delim(paste(GO.Category, Age, "M-", Comparison, Regulated, "Regulated.tsv", sep = ""))
+}
+```
+
+## Loop Function
+The section where the function is run. This takes some time to complete, the next chunk of code is for testing purposes.
+```{r}
+#LOOP FOR CREATING GO TSVs
+#Load datasets under simple, standardized names
+D1 <- YG_baseline_2h_results
+D2 <- YG_baseline_training_results
+D3 <- Old_baseline_2h_results
+D4 <- Old_baseline_training_results
+
+#Loop for Up&Down, Up and Down regulation. This gives three separate outputs for each, allows further analysis on how the GO Terms are expressed.
+#Comment provided only for first if statement as they are the same just for each dataset as defined above
+for (r in 1:3){
+  regulist <- c("UpAndDown", "Up", "Down")
+ 
+  #Loops through each dataset 
+  for (d in 1:4){
+  
+    if (d == 1){
+      Dataset <- D1
+      Age <- "Y" #Defines the age categoery
+      Comparison <- "bv2" #defines the comparison, in this case baseline vs 2 hours
+      GO.Category = c("C", "F", "P") #defines the GO Term category Component/Function/Process
+      
+      #Loops through each GO Term category
+      for (c in 1:3){
+        GO.Analyzer(Dataset, Age, Comparison, GO.Category[c], regulist[r]) #defines all terms to put into the function
+      }
+    }
+      if (d == 2){
+        Dataset <- D2
+        Age <- "Y"
+        Comparison <- "bvt"
+        GO.Category = c("C", "F", "P")
+        
+        for (c in 1:3){
+          GO.Analyzer(Dataset, Age, Comparison, GO.Category[c], regulist[r])
+        }
+      }   
+      if (d == 3){
+        Dataset <- D3
+        Age <- "O"
+        Comparison <- "bv2"
+        GO.Category = c("C", "F", "P")
+        
+        for (c in 1:3){
+          GO.Analyzer(Dataset, Age, Comparison, GO.Category[c], regulist[r])
+        }
+      }
+      if (d == 4){
+        Dataset <- D4
+        Age <- "O"
+        Comparison <- "bvt"
+        GO.Category = c("C", "F", "P")
+          
+          for (c in 1:3){
+            GO.Analyzer(Dataset, Age, Comparison, GO.Category[c], regulist[r])
+          }
+        }
+      }
+    } 
+```
+
+## Loop Function - shortened version for testing
+This is the same as above but shortened for testing purposes
+```{r}
+#LOOP FOR CREATING GO TSVs
+#Load datasets under simple, standardized names
+D1 <- YG_baseline_2h_results
+
+#Loop for Up&Down, Up and Down regulation. This gives three separate outputs for each, allows further analysis on how the GO Terms are expressed.
+#Comment provided only for first if statement as they are the same just for each dataset as defined above
+for (r in 1:3){
+  regulist <- c("UpAndDown", "Up", "Down")
+ 
+  #Loops through each dataset 
+  for (d in 1:4){
+  
+    if (d == 1){
+      Dataset <- D1
+      Age <- "Y" #Defines the age categoery
+      Comparison <- "bv2" #defines the comparison, in this case baseline vs 2 hours
+      GO.Category = c("C", "F", "P") #defines the GO Term category Component/Function/Process
+      
+      #Loops through each GO Term category
+      for (c in 1:1){
+        GO.Analyzer(Dataset, Age, Comparison, GO.Category[c], regulist[r]) #defines all terms to put into the function (TESTING - only looks at Component)
+      }
+    }
+  }
+} 
+```
