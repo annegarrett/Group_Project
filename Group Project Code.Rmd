@@ -21,6 +21,9 @@ library(reshape2) # Manipulating dataframes
 
 ## PCA
 ```{r,results="hide"}
+#set working directory to folder containing data files
+#setwd() 
+
 #Load FPKM data
 all_gene <- read.csv("all.gene.FPKM.csv", header = T)
 
@@ -95,7 +98,6 @@ pca3d(YG_PCA_3d, group=YG_group,show.centroids = TRUE,legend ="top")
 ```
 
 ##Differential Analysis
-
 ```{r,results="hide",warning=FALSE, message=F}
 #load data
 YG_baseline_2h <- read.csv("YG_baseline_2h.csv", row.names=1)
@@ -170,7 +172,6 @@ ggarrange(g1,g2,g3,g4,nrow=2,ncol=2,labels = c("A","B","C","D"))
 ```
 
 ###Finding DEGs shared between groups
-
 ```{r,results="hide"}
 #Import data
 #DEGs <- read.csv("DEGs.csv",header = T)
