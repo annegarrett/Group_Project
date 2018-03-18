@@ -8,7 +8,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 ## Packages
 ```{r, message=FALSE,warning=FALSE,message=FALSE}
-#install.packages(c("NOISeq","ggplot2","ggfortify","ggpubr","factoextra","pca3d","dplyr","reshape2"))
+#install.packages(c("NOISeq","ggplot2","ggfortify","ggpubr","factoextra","pca3d","dplyr","reshape2","tibble","metap"))
 library(NOISeq) # Differential analysis
 library(ggplot2) # Plotting
 library(ggfortify) # Plotting
@@ -17,6 +17,7 @@ library(factoextra) # PCA plots
 library(pca3d) # PCA plots
 library(dplyr) # Data manipulation
 library(reshape2) # Manipulating dataframes
+library(tibble) # Manipulating dataframes
 ```
 
 ## PCA
@@ -203,3 +204,533 @@ l2fc_p5<-ggplot(YG_trained_Old_trained,aes(x=as.character(Genes),y=value,fill=va
 ggarrange(l2fc_p1,l2fc_p2,l2fc_p3,l2fc_p4,l2fc_p5,ncol=3,nrow=2,common.legend=T,labels=c("A","B","C","D","E"))
 
 ```
+### Targeted gene fold change analysis plots
+```{r,results="hide"}
+#Import ID's for the mitchondrial biomarker genes of interest (VIP genes) 
+VIP_Genes <- read.csv("VIP_gene_ids.csv")
+
+#Import Noiseq DEG data for the 4 comparisons
+
+YG_Base_YG_Post_degs <- read.delim("YG_baseline_training_results.csv", check.names = F, sep = ",")
+colnames(YG_Base_YG_Post_degs)[1] <- c("GeneID") #Rename first column
+YG_Base_YG_2h_degs <- read.delim("YG_baseline_2h_results.csv", check.names = F, sep = ",")
+colnames(YG_Base_YG_2h_degs)[1] <- c("GeneID") #Rename first column
+OLD_Base_OLD_Post_degs <- read.delim("Old_baseline_training_results.csv", check.names = F, sep = ",")
+colnames(OLD_Base_OLD_Post_degs)[1] <- c("GeneID") #Rename first column
+OLD_Base_OLD_2h_degs <- read.delim("Old_baseline_2h_results.csv", check.names = F, sep = ",")
+colnames(OLD_Base_OLD_2h_degs)[1] <- c("GeneID") #Rename first column
+
+#Filter Noiseq data by the VIP gene ID's to produce a VIP gene dataframe for each comparison 
+
+YG_Base_YG_Post_degs_filtered <- YG_Base_YG_Post_degs %>% filter(GeneID %in% VIP_Genes$ID)
+YG_Base_YG_2h_degs_filtered <- YG_Base_YG_2h_degs %>% filter(GeneID %in% VIP_Genes$ID)
+OLD_Base_OLD_Post_degs_filtered <- OLD_Base_OLD_Post_degs %>% filter(GeneID %in% VIP_Genes$ID)
+OLD_Base_OLD_2h_degs_filtered <- OLD_Base_OLD_2h_degs %>% filter(GeneID %in% VIP_Genes$ID)
+
+#Produce a list containing each treatments VIP gene datafame 
+
+filtered_list <- list(YG_Base_YG_Post_degs_filtered,YG_Base_YG_2h_degs_filtered,OLD_Base_OLD_Post_degs_filtered,OLD_Base_OLD_2h_degs_filtered)
+
+#Produce a vector containing the name of each comparison we are performing for GGplot to reference  
+
+test_names <- c("YG_Base_YG_Post","YG_Base_YG_2h","OLD_Base_OLD_Post","OLD_Base_OLD_2h")
+
+#Produce a vector of column names for the plot dataframes      
+
+col_name_vec <- c("GeneID","comparison_mean","Baseline_mean","theta","prob","log2FC","threshold","Genes")
+
+
+##############
+
+#The following section produces a plot of fold change in PGC-1 primary regulator of mitochondrial biogenesis (PGC) across each comparison of interest 
+
+    #Produce empty PGC reference dataframe
+    PGC_data <- setNames(data.frame(matrix(ncol = 8, nrow = 1)), c(col_name_vec))
+    
+    #This loop extracts the log fold change PGC for each comparison, adds it to the PGC reference dataframe, along wiht the comparison's title 
+    
+    for (i in 1:4) {
+      PGC_data[i,] <- filtered_list[[i]]%>% filter(GeneID %in% c(VIP_Genes$ID[1]))
+      rownames(PGC_data)[i] <- c(test_names[i]) #notes the comparison
+    }
+    
+    #Transform the dataframe to a format suitable for plotting  
+    PGC_data <- rownames_to_column(PGC_data)
+    
+    #Extract relevant columns 
+    PGC_data <- as.data.frame(PGC_data[,c(1,2,6,7,8)])
+    
+    #Rename the first column to "comparison"
+    colnames(PGC_data)[1]<-c("Comparison")
+    
+    #PGC_data <- PGC_data %>% filter(Comparison != "1")
+    
+    #Produce a bar plot of fold change on the y axis for each comparison,
+    PGC_plot <- ggplot(PGC_data, aes(x = Comparison, y=log2FC, fill = factor(GeneID)))+ geom_col() +theme(axis.text.x=element_text(angle=45,hjust=1)) + labs(title = "PGC-1 Gene Fold-Change Across Comparisons", fill="GeneID")+ geom_text(aes(label = paste("P=",round(prob,3),sep=""), colour = factor(GeneID), y = log2FC+0.3), position = position_dodge(0.9), show.legend = FALSE)
+    
+    print(PGC_plot)
+
+################################    
+    
+#The following section produces a plot of fold change in HADH metabolic enzyme (HAD) across each comparison of interest 
+    
+    #Produce an empty HAD reference dataframe for the multiple HAD gene IDs 
+
+    for (i in 1:2) {
+      assign(paste0("HAD_data", i), setNames(data.frame(matrix(ncol = 8, nrow = 1)), c(col_name_vec)))
+    }
+
+    
+    #These loop extract the log fold change in each HAD gene for each comparison, adds it to the HAD reference dataframe, along with the comparison's title 
+        
+    for (i in 1:4){
+      HAD_data1[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[2]))
+      rownames(HAD_data1)[i] <- c(test_names[i]) #notes the comparison
+    }
+    
+    #Simply repeated for next HAD gene ID
+    
+    for (i in 1:4){
+      HAD_data2[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[3]))
+      rownames(HAD_data2)[i] <- c(test_names[i]) #notes the comparison
+    }
+    
+    #Transform the dataframes to a format suitable for plotting, and combine the dataframes produced for each HAD gene id  
+    HAD_data1 <- rownames_to_column(HAD_data1)
+    HAD_data2 <- rownames_to_column(HAD_data2)
+    HAD_data <-  rbind(HAD_data1,HAD_data2)
+    
+    #Extract relevant columns 
+    
+    HAD_data <- as.data.frame(HAD_data[,c(1,2,6,7,8)])
+    
+    #Rename the first column to "comparison"
+    
+    colnames(HAD_data)[1]<-c("Comparison")
+    
+    #HAD_data <- HAD_data %>% filter(Comparison != "1")
+    
+    #Produce a bar plot of fold change on the y axis for each comparison,
+    HAD_plot <- ggplot(HAD_data, aes(x = Comparison, y=log2FC, fill = factor(GeneID)))+ geom_col() +theme(axis.text.x=element_text(angle=45,hjust=1)) + labs(title = "βHAD Gene Fold-Change Across Comparisons", fill="GeneID") + geom_text(aes(label = paste("P=",round(prob,3),sep=""), colour = factor(GeneID), y = 0.2), position = position_stack(vjust = 0.6), show.legend = FALSE)
+   
+    print(HAD_plot)
+
+################################    
+    
+#The following section produces a plot of fold change in SDHD (SDH) across each comparison of interest 
+    
+    #Produce an empty SDH reference dataframe for the multiple SDH gene IDs 
+    
+    for (i in 1:27) {
+      assign(paste0("SDH_data", i), setNames(data.frame(matrix(ncol = 8, nrow = 1)), c(col_name_vec)))
+    }
+  
+    #These loops extract the log fold change in each SDH gene ID for each comparison, adds it to the SDH reference dataframe, along with the comparison's title 
+    
+        for (i in 1:4){
+          SDH_data1[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[4]))
+          rownames(SDH_data1)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        for (i in 1:4){
+          SDH_data2[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[5]))
+          rownames(SDH_data2)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        for (i in 1:4){
+          SDH_data3[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[6]))
+          rownames(SDH_data3)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        for (i in 1:4){
+          SDH_data4[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[7]))
+          rownames(SDH_data4)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        for (i in 1:4){
+          SDH_data5[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[8]))
+          rownames(SDH_data5)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        for (i in 1:4){
+          SDH_data6[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[9]))
+          rownames(SDH_data6)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        for (i in 1:4){
+          SDH_data7[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[10]))
+          rownames(SDH_data7)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        for (i in 1:4){
+          SDH_data8[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[11]))
+          rownames(SDH_data8)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        for (i in 1:4){
+          SDH_data9[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[12]))
+          rownames(SDH_data9)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        #for (i in 1:4){
+        #  SDH_data10[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[13]))
+        #  rownames(SDH_data10)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        for (i in 1:4){
+          SDH_data11[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[14]))
+          rownames(SDH_data11)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        #for (i in 1:4){
+        #  SDH_data12[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[15]))
+        #  rownames(SDH_data12)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #for (i in 1:4){
+        #  SDH_data13[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[16]))
+        #  rownames(SDH_data13)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #for (i in 1:4){
+        #  SDH_data14[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[17]))
+        #  rownames(SDH_data14)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #for (i in 1:4){
+        #  SDH_data15[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[18]))
+        #  rownames(SDH_data15)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #for (i in 1:4){
+        #  SDH_data16[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[19]))
+        #  rownames(SDH_data16)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #for (i in 1:4){
+        #  SDH_data17[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[20]))
+        #  rownames(SDH_data17)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #for (i in 1:4){
+        #  SDH_data18[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[21]))
+        #  rownames(SDH_data18)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #for (i in 1:4){
+        #  SDH_data19[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[22]))
+        #  rownames(SDH_data19)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #for (i in 1:4){
+        #  SDH_data20[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[23]))
+        #  rownames(SDH_data20)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #for (i in 1:4){
+        #  SDH_data21[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[24]))
+        #  rownames(SDH_data21)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #for (i in 1:4){
+        #  SDH_data22[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[25]))
+        #  rownames(SDH_data22)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #for (i in 1:4){
+        #  SDH_data23[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[26]))
+        #  rownames(SDH_data23)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        for (i in 1:4){
+          SDH_data24[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[27]))
+          rownames(SDH_data24)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        #for (i in 1:4){
+        #  SDH_data25[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[28]))
+        #  rownames(SDH_data25)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #for (i in 1:4){
+        #  SDH_data26[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[29]))
+        #  rownames(SDH_data26)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #for (i in 1:4){
+        #  SDH_data27[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[30]))
+        #  rownames(SDH_data27)[i] <- c(test_names[i]) #notes the comparison
+        #}
+    
+        #Transform the dataframes of each SHD gene to a format suitable for plotting
+        SDH_data1 <- rownames_to_column(SDH_data1)
+        SDH_data2 <- rownames_to_column(SDH_data2)
+        SDH_data3 <- rownames_to_column(SDH_data3)
+        SDH_data4 <- rownames_to_column(SDH_data4)
+        SDH_data5 <- rownames_to_column(SDH_data5)
+        SDH_data6 <- rownames_to_column(SDH_data6)
+        SDH_data7 <- rownames_to_column(SDH_data7)
+        SDH_data8 <- rownames_to_column(SDH_data8)
+        SDH_data9 <- rownames_to_column(SDH_data9)
+        #SDH_data10 <- rownames_to_column(SDH_data10)
+        SDH_data11 <- rownames_to_column(SDH_data11)
+        #SDH_data12 <- rownames_to_column(SDH_data12)
+        #SDH_data13 <- rownames_to_column(SDH_data13)
+        #SDH_data14 <- rownames_to_column(SDH_data14)
+        #SDH_data15 <- rownames_to_column(SDH_data15)
+        #SDH_data16 <- rownames_to_column(SDH_data16)
+        #SDH_data17 <- rownames_to_column(SDH_data17)
+        #SDH_data18 <- rownames_to_column(SDH_data18)
+        #SDH_data19 <- rownames_to_column(SDH_data19)
+        #SDH_data20 <- rownames_to_column(SDH_data20)
+        #SDH_data21 <- rownames_to_column(SDH_data21)
+        #SDH_data22 <- rownames_to_column(SDH_data22)
+        #SDH_data23 <- rownames_to_column(SDH_data23)
+        SDH_data24 <- rownames_to_column(SDH_data24)
+        #SDH_data25 <- rownames_to_column(SDH_data25)
+        #SDH_data26 <- rownames_to_column(SDH_data26)
+        #SDH_data27 <- rownames_to_column(SDH_data27)
+
+        #combine the dataframes produced for each SDH gene id  
+        #SDH_data <-  rbind(SDH_data1,SDH_data2,SDH_data3,SDH_data4,SDH_data5,SDH_data6,SDH_data7,SDH_data8,SDH_data9,SDH_data10,SDH_data11,SDH_data12,SDH_data13,SDH_data14,SDH_data15,SDH_data16,SDH_data17,SDH_data18,SDH_data19,SDH_data20,SDH_data21,SDH_data22,SDH_data23,SDH_data24,SDH_data25,SDH_data26,SDH_data27)
+        SDH_data <-  rbind(SDH_data1,SDH_data2,SDH_data3,SDH_data4,SDH_data5,SDH_data6,SDH_data7,SDH_data8,SDH_data9,SDH_data11,SDH_data24)
+        
+        #Extract relevant columns 
+        SDH_data <- as.data.frame(SDH_data[,c(1,2,6,7,8)])
+        
+        #rename first column to comparison
+        colnames(SDH_data)[1] <- c("Comparison")
+        
+        #remove SDH genes which were found not to be expressed in our samples
+        SDH_data <- SDH_data %>% filter(Comparison != "1")
+        
+        #produce a dataframe filtered for a probability threshold
+        SDH_data_strict <- SDH_data %>% filter(prob > "0.7")
+
+        #Produce a bar plot of fold change on the y axis for each comparison,
+        SDH_plot <- ggplot(SDH_data, aes(x = Comparison, y=log2FC, fill = factor(GeneID)))+ geom_col() +theme(axis.text.x=element_text(angle=45,hjust=1)) + labs(title = "SDH Gene Fold-Change Across Comparisons", fill="GeneID") #+ geom_text(aes(label = paste("P=",round(prob,3),sep=""), colour = factor(GeneID), y = 2.5), position = position_stack(vjust = 0.6), show.legend = FALSE)
+        print(SDH_plot)
+        
+        #Produce a second bar plot but only for fold changes, with a probability greater than 0.7
+        SDH_strict_plot <- ggplot(SDH_data_strict, aes(x = Comparison, y=log2FC, fill = factor(GeneID)))+ geom_col() +theme(axis.text.x=element_text(angle=45,hjust=1),plot.title = element_text(hjust = 0.6)) + labs(title = "SDH Gene Fold-Change (probability >0.7) Across Comparisons ", fill="GeneID") 
+        
+        print(SDH_strict_plot)
+        
+
+################################    
+    
+    #The following section produces a plot of fold change in Citrate synthase metabolic enzyme (CS) across each comparison of interest 
+        
+        #Produce an empty CS reference dataframe for the multiple CS gene IDs 
+        
+        for (i in 1:2) {
+          assign(paste0("CS_data", i), setNames(data.frame(matrix(ncol = 8, nrow = 1)), c(col_name_vec)))
+        }        
+        
+        #These loops extract the log fold change in each CS gene ID for each comparison, adds it to the CS reference dataframe, along with the comparison's title 
+
+        for (i in 1:4){
+          CS_data1[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[31]))
+          rownames(CS_data1)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        #for (i in 1:4){
+        #  CS_data2[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[32]))
+        #  rownames(CS_data2)[i] <- c(test_names[i]) #notes the comparison
+        #}
+        
+        #Transform the dataframes of each CS gene to a format suitable for plotting
+    
+        
+        CS_data1 <- rownames_to_column(CS_data1)
+        #CS_data2 <- rownames_to_column(CS_data2)
+        
+        #combine the dataframes produced for each CS gene id  
+        
+        CS_data <-  CS_data1
+        
+        #Extract relevant columns  
+      
+        CS_data <- as.data.frame(CS_data[,c(1,2,6,7,8)])
+        
+        #rename first column to comparison
+        colnames(CS_data)[1] <- c("Comparison")
+        
+        #remove CS genes which were found not to be expressed in our samples
+      
+        CS_data <- CS_data %>% filter(Comparison != "1")
+        
+        #Produce a bar plot of fold change on the y axis for each comparison,
+        CS_plot <- ggplot(CS_data, aes(x = Comparison, y=log2FC, fill = factor(GeneID)))+ geom_col() +theme(axis.text.x=element_text(angle=45,hjust=1)) + labs(title = "CS Gene Fold-Change Across Comparisons", fill="GeneID")+ geom_text(aes(label = paste("P=",round(prob,3),sep=""), colour = factor(GeneID), y = log2FC*1.25+0.01), show.legend = FALSE)
+        
+        print(CS_plot)
+
+################################    
+        
+    #The following section produces a plot of fold change in cytochrome c oxidase, subunit IV (COX) across each comparison of interest 
+    
+        #Produce an empty COXIV reference dataframe for the multiple COX gene IDs 
+        
+        for (i in 1:2) {
+          assign(paste0("COX_data", i), setNames(data.frame(matrix(ncol = 8, nrow = 1)), c(col_name_vec)))
+        }   
+        
+        #These loops extract the log fold change in each COX gene ID for each comparison, adds it to the COX reference dataframe, along with the comparison's title 
+      
+        for (i in 1:4){
+          COX_data1[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[33]))
+          rownames(COX_data1)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        for (i in 1:4){
+          COX_data2[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[34]))
+          rownames(COX_data2)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        
+        #Transform the dataframes of each COX gene to a format suitable for plotting
+        
+        COX_data1 <- rownames_to_column(COX_data1)
+        COX_data2 <- rownames_to_column(COX_data2)
+        
+        #combine the dataframes produced for each COX gene id  
+        
+        COX_data <-  rbind(COX_data1,COX_data2)
+        
+        #Extract relevant columns 
+        
+        COX_data <- as.data.frame(COX_data[,c(1,2,6,7,8)])
+        
+        #rename first column to comparison
+        colnames(COX_data)[1] <- c("Comparison")
+      
+        #Produce a bar plot of fold change on the y axis for each comparison,
+        COX_plot <- ggplot(COX_data, aes(x = Comparison, y=log2FC, fill = factor(GeneID)))+ geom_col() +theme(axis.text.x=element_text(angle=45,hjust=1)) + labs(title = "COXIV Gene Fold-Change Across Comparisons", fill="GeneID")+ geom_text(aes(label = paste("P=",round(prob,3),sep=""), colour = factor(GeneID), y = 0.5), position = position_stack(vjust = -2.5), show.legend = FALSE)
+        
+        print(COX_plot)
+
+################################    
+        
+    #The following section produces a plot of fold change in mitofusin 1 (MFN1) across each comparison of interest 
+        
+        #Produce an empty MFN1 reference dataframe 
+        
+        MFN1_data <- setNames(data.frame(matrix(ncol = 8, nrow = 1)), c(col_name_vec))
+
+        #This loops extracts the log fold change in MFN1 gene for each comparison, adds it to the COX reference dataframe, along with the comparison's title 
+        
+        for (i in 1:4){
+          MFN1_data[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[35]))
+          rownames(MFN1_data)[i] <- c(test_names[i]) #notes the comparison
+        }
+
+        #Transform the dataframes of MFN1 gene to a format suitable for plotting
+        
+        MFN1_data <- rownames_to_column(MFN1_data)
+        
+        #extract relevant columns 
+        MFN1_data <- as.data.frame(MFN1_data[,c(1,2,6,7,8)])
+        
+        #Rename first column to compariosn
+        
+        colnames(MFN1_data)[1] <- c("Comparison")
+        
+        #Produce a bar plot of fold change on the y axis for each comparison,
+        MFN1_plot <- ggplot(MFN1_data, aes(x = Comparison, y=log2FC, fill = factor(GeneID)))+ geom_col() +theme(axis.text.x=element_text(angle=45,hjust=1)) + labs(title = "Mitofusin 1 Gene Fold-Change Across Comparisons", fill="GeneID")+ geom_text(aes(label = paste("P=",round(prob,3),sep=""), colour = factor(GeneID), y = log2FC - 0.01), show.legend = FALSE)
+        
+        print(MFN1_plot)
+
+################################    
+        
+    #The following section produces a plot of fold change in mitofusin 2 (MFN2) across each comparison of interest 
+        
+        #Produce an empty MFN2 reference dataframe 
+        
+        MFN2_data <- setNames(data.frame(matrix(ncol = 8, nrow = 1)), c(col_name_vec))
+        
+        #This loops extracts the log fold change in MFN1 gene for each comparison, adds it to the COX reference dataframe, along with the comparison's title 
+        
+        for (i in 1:4){
+          MFN2_data[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[36]))
+          rownames(MFN2_data)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        #Transform the dataframes of MFN2 gene to a format suitable for plotting
+        
+        MFN2_data <- rownames_to_column(MFN2_data)
+        
+        #extract relevant columns 
+        MFN2_data <- as.data.frame(MFN2_data[,c(1,2,6,7,8)])
+        
+        #Rename first column to compariosn
+        
+        colnames(MFN2_data)[1] <- c("Comparison")
+        
+        #Produce a bar plot of fold change on the y axis for each comparison,
+        MFN2_plot <- ggplot(MFN2_data, aes(x = Comparison, y=log2FC, fill = factor(GeneID)))+ geom_col() +theme(axis.text.x=element_text(angle=45,hjust=1)) + labs(title = "Mitofusin 2 Gene Fold-Change Across Comparisons", fill="GeneID")+ geom_text(aes(label = paste("P=",round(prob,3),sep=""), colour = factor(GeneID), y = log2FC*1.2), show.legend = FALSE)
+        
+        print(MFN2_plot)
+        
+################################    
+        
+    #The following section produces a plot of fold change in optic atrophy protein-1 mitochondrial dynamin like GTPase (OPA1) across each comparison of interest 
+        
+        #Produce an empty OPA1 reference dataframe 
+        OPA1_data <- setNames(data.frame(matrix(ncol = 8, nrow = 1)), c(col_name_vec))
+
+        
+        #This loops extracts the log fold change in OPA1 gene for each comparison, adds it to the COX reference dataframe, along with the comparison's title 
+        
+        for (i in 1:4){
+          OPA1_data[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[37]))
+          rownames(OPA1_data)[i] <- c(test_names[i]) #notes the comparison
+        }
+
+        #Transform the dataframes of OPA gene to a format suitable for plotting
+        
+        OPA1_data <- rownames_to_column(OPA1_data)
+        
+        #extract relevant columns 
+        
+        OPA1_data <- as.data.frame(OPA1_data[,c(1,2,6,7,8)])
+        
+        #rename first column to comparison
+        colnames(OPA1_data)[1] <- c("Comparison")
+        
+        #Produce a bar plot of fold change on the y axis for each comparison,
+        OPA1_plot <- ggplot(OPA1_data, aes(x = Comparison, y=log2FC, fill = factor(GeneID)))+ geom_col() +theme(axis.text.x=element_text(angle=45,hjust=1)) + labs(title = "OPA1 Gene Fold-Change Across Comparisons", fill="GeneID")+geom_text(aes(label = paste("P=",round(prob,3),sep=""), colour = factor(GeneID), y = log2FC*1.25), show.legend = FALSE)
+        
+        print(OPA1_plot)
+
+################################    
+        
+   #The following section produces a plot of fold change in fission mitochondrial (FIS1) across each comparison of interest 
+        
+        #Produce an empty FIS1 reference dataframe 
+        FIS1_data <- setNames(data.frame(matrix(ncol = 8, nrow = 1)), c(col_name_vec))
+        
+        
+        #This loops extracts the log fold change in FIS1 gene for each comparison, adds it to the COX reference dataframe, along with the comparison's title 
+        
+        for (i in 1:4){
+          FIS1_data[i,] <- filtered_list[[i]] %>% filter(GeneID %in% c(VIP_Genes$ID[38]))
+          rownames(FIS1_data)[i] <- c(test_names[i]) #notes the comparison
+        }
+        
+        #Transform the dataframes of FIS1 gene to a format suitable for plotting
+        
+        FIS1_data <- rownames_to_column(FIS1_data)
+        
+        #extract relevant columns 
+        
+        FIS1_data <- as.data.frame(FIS1_data[,c(1,2,6,7,8)])
+        
+        #rename first column to comparison
+        colnames(FIS1_data)[1] <- c("Comparison")
+        
+        #Produce a bar plot of fold change on the y axis for each comparison,
+        FIS1_plot <- ggplot(FIS1_data, aes(x = Comparison, y=log2FC, fill = factor(GeneID)))+ geom_col() +theme(axis.text.x=element_text(angle=45,hjust=1)) + labs(title = "FIS1 Gene Fold-Change Across Comparisons", fill="GeneID")+geom_text(aes(label = paste("P=",round(prob,3),sep=""), colour = factor(GeneID), y = log2FC + 0.01), show.legend = FALSE)
+        
+        print(FIS1_plot)
+```
+        
