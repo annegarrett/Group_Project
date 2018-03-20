@@ -151,7 +151,8 @@ GO.Analyzer <- function(Dataset, Age = c("O", "Y"), Comparison = c("bv2", "bvt",
   sig.list<-subset(summaryresults,summaryresults$p.adjusted<0.05)
   
   #Create output file with GO Terms and their adjusted p-value
-  dplyr::select(summaryresults, GO.Name, p.adjusted) %>% filter( p.adjusted < 0.05) %>% write_delim(paste(GO.Category, Age, "M-", Comparison, Regulated, "Regulated.tsv", sep = ""))
+  df <- dplyr::select(summaryresults, GO.Name, p.adjusted) %>% filter( p.adjusted < 0.05) %>% write_delim(paste(GO.Category, Age, "M-", Comparison, Regulated, "Regulated.tsv", sep = ""))
+  assign(paste(GO.Category, Age, "M-", Comparison, Regulated, "Regulated", sep = ""), df)
 }
 ```
 
